@@ -12,7 +12,9 @@ pub fn create(
     async move {
         let http = serenity::http::Http::new(&token);
         loop {
-            let mut store = persist.load::<Store>("store").expect("");
+            let mut store = persist
+                .load::<Store>(crate::PERSISTENT_STORE_KEY)
+                .unwrap_or_default();
 
             for stored_entry in store.entries.iter_mut() {
                 if let Ok(entry) =
@@ -31,6 +33,7 @@ pub fn create(
                 } else {
                     error!("Error processing for '{}'", stored_entry.username);
                 }
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
             }
 
             // After all entries are processed, update the persistent storage
