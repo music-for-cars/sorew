@@ -25,7 +25,8 @@ pub fn create(
                             &entry.latest_track_uri,
                         )
                         .await;
-                        *stored_entry = entry;
+                        stored_entry.latest_track_uri = entry.latest_track_uri;
+                        stored_entry.latest_track_title = entry.latest_track_title;
                     }
                 } else {
                     error!("Error processing for '{}'", stored_entry.username);
