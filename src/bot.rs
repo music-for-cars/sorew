@@ -4,7 +4,7 @@ use serenity::model::channel::Message;
 use serenity::model::gateway::Ready;
 use serenity::prelude::*;
 use shuttle_persist::PersistInstance;
-use tracing::{error, info};
+// use tracing::{error, info};
 
 pub struct Bot;
 
@@ -46,7 +46,7 @@ impl EventHandler for Bot {
                 )
                 .await
             {
-                error!("Error sending message: {:?}", e);
+                // error!("Error sending message: {:?}", e);
             }
         }
 
@@ -64,7 +64,7 @@ impl EventHandler for Bot {
                     .say(&ctx.http, format!("Already following: {}", username))
                     .await
                 {
-                    error!("Error sending message: {:?}", e);
+                    // error!("Error sending message: {:?}", e);
                 }
             } else {
                 store.entries.push(Entry {
@@ -78,7 +78,7 @@ impl EventHandler for Bot {
                     .say(&ctx.http, format!("Now following: [{}]", username))
                     .await
                 {
-                    error!("Error sending message: {:?}", e);
+                    // error!("Error sending message: {:?}", e);
                 }
             }
         }
@@ -92,7 +92,7 @@ impl EventHandler for Bot {
                 .say(&ctx.http, format!("Stopped following: {}", username))
                 .await
             {
-                error!("Error sending message: {:?}", e);
+                // error!("Error sending message: {:?}", e);
             }
         }
 
@@ -104,6 +104,6 @@ impl EventHandler for Bot {
     }
 
     async fn ready(&self, _: Context, ready: Ready) {
-        info!("{} is connected!", ready.user.name);
+        // info!("{} is connected!", ready.user.name);
     }
 }

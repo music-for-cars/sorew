@@ -2,7 +2,7 @@ use crate::{scscraper, storage::Store};
 use serenity::model::prelude::ChannelId;
 use shuttle_persist::PersistInstance;
 use std::future::Future;
-use tracing::error;
+// use tracing::error;
 
 pub fn create(
     token: String,
@@ -31,7 +31,7 @@ pub fn create(
                         stored_entry.latest_track_title = entry.latest_track_title;
                     }
                 } else {
-                    error!("Error processing for '{}'", stored_entry.username);
+                    // error!("Error processing for '{}'", stored_entry.username);
                 }
                 tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
             }
