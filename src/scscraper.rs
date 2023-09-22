@@ -6,12 +6,22 @@ where
 {
     let username = username.into();
 
-    let content = reqwest::get(format!("https://soundcloud.com/{}/tracks", username))
-        .await
-        .map_err(|e| Error::ScrapeFetchError(e.to_string()))?
-        .text()
-        .await
-        .map_err(|e| Error::ScrapeFetchError(e.to_string()))?;
+    // reqwest now gets blocked by cloudflare so we have to use curl
+    // let content = reqwest::get(format!("https://soundcloud.com/{}/tracks", username))
+    //     .await
+    //     .map_err(|e| Error::ScrapeFetchError(e.to_string()))?
+    //     .text()
+    //     .await
+    //     .map_err(|e| Error::ScrapeFetchError(e.to_string()))?;
+
+    let output = std::process::Command::new("curl")
+        .arg(format!("https://soundcloud.com/{}/tracks", username))
+        .output()
+        .map_err(|_| Error::ScrapeFetchError("Unable to fetch".to_string()))?;
+
+    let content = String::from_utf8(output.stdout)
+        .map_err(|_| Error::ScrapeParseError("Unable to parse".to_string()))?;
+
     let document = scraper::Html::parse_document(&content);
 
     // The data we need is in a <noscript> tag, somehow scraper doesn't directly parse the html in

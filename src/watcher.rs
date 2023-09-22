@@ -1,45 +1,55 @@
 use crate::{scscraper, storage::Store};
 use serenity::model::prelude::ChannelId;
-use shuttle_persist::PersistInstance;
+use tokio::sync::Mutex;
+// use shuttle_persist::PersistInstance;
 use std::future::Future;
 // use tracing::error;
 
-pub fn create(
-    token: String,
-    persist: PersistInstance,
-    interval_seconds: u64,
-) -> impl Future<Output = ()> {
+pub fn create(config: crate::config::Config, state: crate::bot::State) -> impl Future<Output = ()> {
     async move {
-        let http = serenity::http::Http::new(&token);
+        let http = serenity::http::Http::new(&config.discord_token);
         loop {
-            let mut store = persist
-                .load::<Store>(crate::PERSISTENT_STORE_KEY)
-                .unwrap_or_default();
+            // todo: we should use the same arc mutex store
+            let store: &Mutex<Store> = state.store.as_ref();
 
-            for stored_entry in store.entries.iter_mut() {
-                if let Ok(entry) =
-                    scscraper::get_latest_uri_and_title_for_username(&stored_entry.username).await
+            for stored_entry in store.lock().await.entries.iter_mut() {
+                log::warn!("Wil try to parse now");
+                match scscraper::get_latest_uri_and_title_for_username(&stored_entry.username).await
                 {
-                    if entry.latest_track_uri != stored_entry.latest_track_uri {
-                        send_release_message(
-                            &http,
-                            crate::MFC_RELEASES_CHANNEL_ID,
-                            &entry.latest_track_uri,
-                        )
-                        .await;
-                        stored_entry.latest_track_uri = entry.latest_track_uri;
-                        stored_entry.latest_track_title = entry.latest_track_title;
+                    Ok(entry) => {
+                        log::warn!("Parsing was ok, got {}", entry.latest_track_title);
+                        if entry.latest_track_uri != stored_entry.latest_track_uri {
+                            send_release_message(
+                                &http,
+                                config.discord_channel_id,
+                                &entry.latest_track_uri,
+                            )
+                            .await;
+                            stored_entry.latest_track_uri = entry.latest_track_uri;
+                            stored_entry.latest_track_title = entry.latest_track_title;
+                        }
                     }
-                } else {
-                    // error!("Error processing for '{}'", stored_entry.username);
+                    Err(error) => {
+                        log::error!(
+                            "Error processing for '{}': {}",
+                            stored_entry.username,
+                            error
+                        );
+                    }
                 }
-                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+                tokio::time::sleep(tokio::time::Duration::from_secs(
+                    config.watcher_delay_between_seconds,
+                ))
+                .await;
             }
 
             // After all entries are processed, update the persistent storage
-            persist.save("store", store).unwrap();
-
-            tokio::time::sleep(tokio::time::Duration::from_secs(interval_seconds)).await;
+            crate::storage::save_data("data.json", store.lock().await.to_owned()).unwrap();
+            tokio::time::sleep(tokio::time::Duration::from_secs(
+                config.watcher_interval_seconds,
+            ))
+            .await;
         }
     }
 }

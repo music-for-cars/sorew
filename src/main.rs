@@ -1,46 +1,48 @@
-use anyhow::anyhow;
-use serenity::prelude::*;
-use shuttle_persist::PersistInstance;
-use shuttle_secrets::SecretStore;
+use std::sync::Arc;
+
+use log::{error, warn};
+use storage::{load_data, save_data};
+use tokio::sync::Mutex;
 
 mod bot;
+mod config;
 mod error;
 mod scscraper;
 mod storage;
 mod watcher;
 
-const MFC_RELEASES_CHANNEL_ID: u64 = 1111056725504704592;
-const PERSISTENT_STORE_KEY: &'static str = "store";
-const WATCHER_INTERVAL_SECONDS: u64 = 300;
+#[tokio::main]
+async fn main() {
+    simple_logger::init_with_level(log::Level::Info).unwrap();
 
-#[shuttle_runtime::main]
-async fn serenity(
-    #[shuttle_secrets::Secrets] secret_store: SecretStore,
-    #[shuttle_persist::Persist] persist: PersistInstance,
-) -> Result<shuttle_serenity::SerenityService, shuttle_runtime::Error> {
-    // Get the discord token set in `Secrets.toml`
-    let token = if let Some(token) = secret_store.get("DISCORD_TOKEN") {
-        token
-    } else {
-        return Err(anyhow!("'DISCORD_TOKEN' was not found").into());
+    use envconfig::Envconfig;
+    let config = config::Config::init_from_env().unwrap();
+
+    log::info!("Sorew is starting");
+    let store = match load_data::<storage::Store>("data.json") {
+        Ok(store) => store,
+        Err(e) => {
+            warn!("{}", e);
+            let store = storage::Store::default();
+            save_data("data.json", &store).unwrap();
+            store
+        }
     };
 
     let state = bot::State {
-        persist: persist.clone(),
+        store: Arc::new(Mutex::new(store)),
     };
 
-    // Set gateway intents, which decides what events the bot will be notified about
-    let intents = GatewayIntents::GUILD_MESSAGES | GatewayIntents::MESSAGE_CONTENT;
-
-    let client = Client::builder(&token, intents)
-        .event_handler(bot::Bot)
-        .type_map_insert::<bot::State>(state)
-        .await
-        .expect("Err creating client");
-
     // Setup the watcher loop
-    tokio::spawn(watcher::create(token, persist, WATCHER_INTERVAL_SECONDS));
+    tokio::spawn(watcher::create(
+        config.clone(),
+        bot::State {
+            store: Arc::clone(&state.store),
+        },
+    ));
 
-    // Return the discord bot client, shuttle will run it for us
-    Ok(client.into())
+    if let Err(e) = bot::start(&config.discord_token, state).await.start().await {
+        error!("{}", e);
+        warn!("Restarting");
+    }
 }
